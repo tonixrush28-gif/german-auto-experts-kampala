@@ -1,14 +1,13 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const filename = fileURLToPath(import.meta.url);
+const dirname = path.dirname(filename);
 
 const app = express();
 
@@ -18,20 +17,20 @@ app.use(express.json());
 
 
 // Health check
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    service: "German Auto Experts Kampala"
-  });
+app.get("/api/health",(req,res)=>{
+    res.json({
+        status:"ok",
+        company:"German Auto Experts Kampala"
+    });
 });
 
 
 // Robots
-app.get("/robots.txt", (req, res) => {
+app.get("/robots.txt",(req,res)=>{
 
-  res.type("text/plain");
+    res.type("text/plain");
 
-  res.send(`User-agent: *
+    res.send(`User-agent: *
 Allow: /
 
 Sitemap: https://german-auto-experts-kampala.onrender.com/sitemap.xml`);
@@ -40,11 +39,11 @@ Sitemap: https://german-auto-experts-kampala.onrender.com/sitemap.xml`);
 
 
 // Sitemap
-app.get("/sitemap.xml", (req, res) => {
+app.get("/sitemap.xml",(req,res)=>{
 
-  res.type("application/xml");
+res.type("application/xml");
 
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+res.send(`<?xml version="1.0" encoding="UTF-8"?>
 
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
@@ -52,7 +51,7 @@ app.get("/sitemap.xml", (req, res) => {
 <loc>https://german-auto-experts-kampala.onrender.com/</loc>
 <lastmod>2026-07-30</lastmod>
 <changefreq>weekly</changefreq>
-<priority>1.0</priority>
+<priority>1</priority>
 </url>
 
 </urlset>`);
@@ -60,199 +59,137 @@ app.get("/sitemap.xml", (req, res) => {
 });
 
 
+// AI Diagnostic
+app.post("/api/diagnose", async(req,res)=>{
 
-// AI Diagnostic API
-app.post("/api/diagnose", async (req, res) => {
+try{
 
-  try {
-
-    const {
-      vehicleModel,
-      faultCode,
-      description
-    } = req.body;
-
-
-    if (!description && !faultCode) {
-
-      return res.status(400).json({
-
-        error:
-        "Enter vehicle problem or fault code"
-
-      });
-
-    }
+const {
+vehicleModel,
+faultCode,
+description
+}=req.body;
 
 
-    const apiKey = process.env.GEMINI_API_KEY;
+if(!description && !faultCode){
 
+return res.status(400).json({
+error:"Enter vehicle problem"
+});
 
-    if (!apiKey) {
-
-      return res.json({
-
-        success:true,
-
-        result:{
-
-          summary:
-          "Professional German vehicle inspection required.",
-
-          possibleCauses:[
-
-            "Engine sensor fault",
-
-            "Fuel system issue",
-
-            "Transmission problem",
-
-            "Electrical fault"
-
-          ],
-
-          severity:
-          "Moderate",
-
-          estimateTime:
-          "1-2 Hours",
-
-          recommendedAction:
-          "Visit German Auto Experts Kampala for diagnosis."
-
-        }
-
-      });
-
-    }
-
-
-
-    const ai = new GoogleGenAI({
-
-      apiKey: apiKey
-
-    });
-
-
-
-    const prompt = `
-
-You are a German car diagnostic expert.
-
-Garage:
-German Auto Experts Kampala Uganda.
-
-Vehicle:
-${vehicleModel || "German Vehicle"}
-
-Fault:
-${faultCode || "No code"}
-
-Customer problem:
-${description}
-
-
-Return JSON:
-
-{
-"summary":"",
-"possibleCauses":[],
-"severity":"",
-"estimateTime":"",
-"recommendedAction":""
 }
 
-`;
+
+const key = process.env.GEMINI_API_KEY;
+
+
+if(!key){
+
+return res.json({
+
+success:true,
+
+result:{
+summary:"Professional German car inspection required.",
+possibleCauses:[
+"Engine sensor fault",
+"Fuel system problem",
+"Transmission issue",
+"Electrical fault"
+],
+severity:"Moderate",
+estimateTime:"1-2 Hours",
+recommendedAction:
+"Visit German Auto Experts Kampala."
+}
+
+});
+
+}
 
 
 
-    const response =
-    await ai.models.generateContent({
-
-      model:"gemini-2.0-flash",
-
-      contents:prompt
-
-    });
+const ai = new GoogleGenAI({
+apiKey:key
+});
 
 
+const response =
+await ai.models.generateContent({
 
-    let result;
+model:"gemini-2.0-flash",
 
+contents:`
 
-    try {
+You are a German vehicle diagnostic expert.
 
-      result = JSON.parse(response.text);
+Vehicle:
+${vehicleModel}
 
-    } catch {
+Fault:
+${faultCode}
 
-      result = {
+Problem:
+${description}
 
-        summary: response.text
+Return JSON with:
+summary,
+possibleCauses,
+severity,
+estimateTime,
+recommendedAction
 
-      };
+`
 
-    }
-
-
-
-    res.json({
-
-      success:true,
-
-      result
-
-    });
-
-
-
-  } catch(error) {
+});
 
 
-    console.error(error);
+res.json({
+
+success:true,
+
+result:response.text
+
+});
 
 
-    res.status(500).json({
+}catch(error){
 
-      error:
-      "Diagnostic service failed",
+console.log(error);
 
-      details:
-      error.message
+res.status(500).json({
 
-    });
+error:"AI service failed"
 
+});
 
-  }
+}
 
 });
 
 
 
+// Serve website
+const dist = path.join(dirname,"dist");
 
-// Production static files
-const distPath = path.join(__dirname, "dist");
-
-app.use(express.static(distPath));
+app.use(express.static(dist));
 
 
-// React/Vite fallback
-app.get("*", (req,res)=>{
+app.get("*",(req,res)=>{
 
-  res.sendFile(
-    path.join(distPath,"index.html")
-  );
+res.sendFile(
+path.join(dist,"index.html")
+);
 
 });
 
 
 
-// Start server
+// Start
 app.listen(PORT,"0.0.0.0",()=>{
 
- console.log(
-  `German Auto Experts server running on port ${PORT}`
- );
+console.log(
+`German Auto Experts running on port ${PORT}`
+);
 
 });
